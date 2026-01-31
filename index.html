@@ -3,58 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Teachable Machine Demo</title>
+  <title>Teachable Machine - Upload Image</title>
 </head>
 <body>
-  <h1>Teachable Machine Demo</h1>
+  <h1>Upload an image to classify</h1>
 
-  <button onclick="init()">Start</button>
-  <div id="webcam-container"></div>
-  <div id="label-container"></div>
+  <input id="file" type="file" accept="image/*" />
+  <div style="margin-top:12px;">
+    <img id="preview" style="max-width:320px; display:none; border:1px solid #ccc;" />
+  </div>
+
+  <h3>Predictions</h3>
+  <div id="label-container">Load the model first…</div>
+
+  <button id="loadBtn">Load model</button>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
   <script>
     const URL = "./model/";
+    let model, maxPredictions;
 
-    let model, webcam, labelContainer, maxPredictions;
+    const loadBtn = document.getElementById("loadBtn");
+    const fileInput = document.getElementById("file");
+    const preview = document.getElementById("preview");
+    const labelContainer = document.getElementById("label-container");
 
-    async function init() {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
+    loadBtn.onclick = async () => {
+      try {
+        labelContainer.innerHTML = "Loading model…";
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
 
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
 
-      webcam = new tmImage.Webcam(320, 320, true);
-      await webcam.setup();
-      await webcam.play();
-      window.requestAnimationFrame(loop);
-
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
+        labelContainer.innerHTML = "Model loaded. Upload an image.";
+      } catch (e) {
+        console.error(e);
+        labelContainer.innerHTML = "Failed to load model. Check console.";
       }
-    }
+    };
 
-    async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-      for (let i = 0; i < maxPredictions; i++) {
-        const p = prediction[i];
-        labelContainer.childNodes[i].innerHTML =
-          `${p.className}: ${(p.probability * 100).toFixed(1)}%`;
+    fileInput.addEventListener("change", async (event) => {
+      if (!model) {
+        alert("Click 'Load model' first.");
+        return;
       }
-    }
+
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      preview.src = url;
+      preview.style.display = "block";
+
+      // Wait for image to load before predicting
+      preview.onload = async () => {
+        try {
+          const prediction = await model.predict(preview);
+          prediction.sort((a,b) => b.probability - a.probability);
+
+          labelContainer.innerHTML = prediction
+            .map(p => `${p.className}: ${(p.probability * 100).toFixed(1)}%`)
+            .join("<br/>");
+        } catch (e) {
+          console.error(e);
+          labelContainer.innerHTML = "Prediction failed. Check console.";
+        }
+      };
+    });
   </script>
 </body>
 </html>
